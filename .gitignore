@@ -1,21 +1,19 @@
-# ---------------------------
-# Python
-# ---------------------------
+
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Byte-compiled / optimized / DLL files
+
 *.pyo
 *.pyd
 *.pdb
 
-# Virtual environment
+
 venv/
 env/
 .venv/
 
-# Distribution / packaging
+
 build/
 develop-eggs/
 dist/
@@ -35,9 +33,7 @@ var/
 pip-log.txt
 pip-delete-this-directory.txt
 
-# ---------------------------
-# Environment / Config
-# ---------------------------
+
 .env
 .env.*
 *.env
@@ -45,16 +41,12 @@ pip-delete-this-directory.txt
 *.cfg
 secrets.json
 
-# ---------------------------
-# SQLite Database
-# ---------------------------
+
 *.db
 *.sqlite3
 *.sqlite
 
-# ---------------------------
-# Logs / Cache
-# ---------------------------
+
 *.log
 logs/
 *.pid
@@ -68,9 +60,7 @@ logs/
 .mypy_cache/
 pytestdebug.log
 
-# ---------------------------
-# IDE / Editor Files
-# ---------------------------
+
 .vscode/
 .idea/
 *.sublime-project
@@ -78,29 +68,21 @@ pytestdebug.log
 .DS_Store
 Thumbs.db
 
-# ---------------------------
-# Static Files / Generated Audio
-# ---------------------------
+
 static/tts/*.mp3
 static/tmp/
 temp/
 tmp/
 
-# ---------------------------
-# Jupyter / Notebook
-# ---------------------------
+
 .ipynb_checkpoints
 
-# ---------------------------
-# OS Specific
-# ---------------------------
+
 ehthumbs.db
 Icon?
 Desktop.ini
 
-# ---------------------------
-# Uvicorn / FastAPI Specific
-# ---------------------------
+
 *.sock
 *.pid
 *.log
