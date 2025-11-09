@@ -1,0 +1,208 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Bot Publisher (LiveKit)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  
+  <script src="/static/lib/livekit-client.umd.js"></script>
+ 
+  <script>window.livekit = window.LivekitClient || window.livekit || window.livekitClient || window.LiveKit || null;</script>
+
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#f4f6fb;padding:18px}
+    h3{margin:0 0 12px 0}
+    .row{display:flex;gap:8px;margin-bottom:10px;align-items:center}
+    input, button, select{padding:8px;border-radius:6px;border:1px solid #dbeafe}
+    button{cursor:pointer;background:#2563eb;color:#fff;border:none}
+    #log{background:#fff;padding:12px;border-radius:8px;max-height:360px;overflow:auto;border:1px solid #e6eefc}
+    .small{font-size:13px;color:#555}
+  </style>
+</head>
+<body>
+  <h3>Bot Publisher (joins room & plays TTS into room)</h3>
+
+  <div class="row">
+    <input id="roomName" placeholder="room" value="frontdesk-demo" />
+    <input id="botIdentity" placeholder="bot identity" value="frontdesk-bot" />
+    <button id="joinBtn">Join Room (Bot)</button>
+    <button id="leaveBtn" disabled>Leave</button>
+  </div>
+
+  <div class="row small">
+    <div style="flex:1"><b>WebSocket status:</b> <span id="wsstat">not connected</span></div>
+    <div id="status" class="small"></div>
+  </div>
+
+  <div id="log"></div>
+
+<script>
+
+  const logEl = document.getElementById("log");
+  function log(msg){
+    const d = document.createElement("div");
+    d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logEl.prepend(d);
+  }
+
+  const LIVEKIT_SERVER = (window.location.protocol === 'https:' ? (window.location.origin.replace(/^https?:/,'https:')) : "https://hitl-f0xa31h8.livekit.cloud");
+  let room = null;
+  let ws = null;
+  let publishedTrack = null;
+
+  
+  async function robustConnect(serverUrl, token, opts = {}) {
+    const LK = window.livekit || window.LivekitClient || window.livekitClient || window.LiveKit || null;
+    if (!LK) throw new Error("no LiveKit global found on window");
+
+    
+    if (typeof LK.connect === "function") {
+      return await LK.connect(serverUrl, token, opts);
+    }
+    
+    if (LK.Room && typeof LK.Room.connect === "function") {
+      return await LK.Room.connect(serverUrl, token, opts);
+    }
+   
+    try {
+      if (typeof LK.Room === "function") {
+        const r = new LK.Room();
+        if (typeof r.connect === "function") {
+          await r.connect(serverUrl, token, opts);
+          return r;
+        }
+        if (typeof r.join === "function") {
+          await r.join(token, opts);
+          return r;
+        }
+        if (typeof r.joinRoom === "function") {
+          await r.joinRoom(token, opts);
+          return r;
+        }
+      }
+    } catch (e){ console.warn("robustConnect: instance Room attempt failed:", e); }
+
+  
+    if (LK.default && typeof LK.default.connect === "function") {
+      return await LK.default.connect(serverUrl, token, opts);
+    }
+   
+    for (const k of Object.keys(LK)) {
+      try {
+        if (typeof LK[k] === "function" && k.toLowerCase().includes("connect")) {
+          const res = await LK[k](serverUrl, token, opts);
+          return res;
+        }
+      } catch(e){}
+    }
+
+    throw new Error("LiveKit connect not found. LK keys: " + JSON.stringify(Object.keys(LK).slice(0,200)));
+  }
+
+  async function getToken(identity, roomName){
+    const url = `/livekit/token?identity=${encodeURIComponent(identity)}&room=${encodeURIComponent(roomName)}`;
+    const resp = await fetch(url);
+    if(!resp.ok){
+      const txt = await resp.text();
+      throw new Error("token error: " + txt);
+    }
+    const j = await resp.json();
+    if(j.token) return j.token;
+    throw new Error("token missing in response: " + JSON.stringify(j));
+  }
+
+ 
+  async function playAndPublish(mp3Url){
+    if(!room){ log("Not in room"); return; }
+    try{
+      log("Loading audio: " + mp3Url);
+      const audio = new Audio(mp3Url);
+      audio.crossOrigin = "anonymous";
+      await audio.load();
+
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = ctx.createMediaElementSource(audio);
+      const dest = ctx.createMediaStreamDestination();
+      source.connect(dest);
+      source.connect(ctx.destination);
+
+      if(publishedTrack){
+        try { await room.localParticipant.unpublishTrack(publishedTrack); } catch(e){}
+        try { publishedTrack.stop && publishedTrack.stop(); } catch(e){}
+        publishedTrack = null;
+      }
+
+      const LK = window.livekit || window.LivekitClient || window.livekitClient || window.LiveKit;
+      const tracks = await LK.createLocalTracks({ audio: { echoCancellation: true, noiseSuppression: true }, video: false, existingStream: dest.stream });
+      const audioTrack = tracks && tracks[0];
+      if(!audioTrack) { log("Failed to create audio track"); return; }
+      await room.localParticipant.publishTrack(audioTrack);
+      publishedTrack = audioTrack;
+      log("Published bot audio track. Playing...");
+      audio.play();
+      audio.onended = () => log("Audio finished");
+    }catch(e){
+      log("play error: " + (e && e.toString ? e.toString() : e));
+    }
+  }
+
+ 
+  document.getElementById("joinBtn").onclick = async () => {
+    const roomName = document.getElementById("roomName").value.trim();
+    const identity = document.getElementById("botIdentity").value.trim();
+    if(!roomName || !identity){ alert("Enter room & identity"); return; }
+    try{
+      log("Requesting token...");
+      const token = await getToken(identity, roomName);
+      log("Connecting to LiveKit server...");
+      room = await robustConnect(LIVEKIT_SERVER, token, { adaptiveStream: true });
+      log("Bot joined room as " + identity);
+      document.getElementById("joinBtn").disabled = true;
+      document.getElementById("leaveBtn").disabled = false;
+
+      
+      ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/bot");
+      ws.onopen = () => { document.getElementById("wsstat").textContent = "connected"; log("WS connected"); };
+      ws.onclose = () => { document.getElementById("wsstat").textContent = "closed"; log("WS closed"); };
+      ws.onerror = (e) => { log("WS error: " + JSON.stringify(e)); };
+      ws.onmessage = async (evt) => {
+        log("WS msg: " + evt.data);
+        let payload = null;
+        try { payload = JSON.parse(evt.data); } catch(e){ log("WS parse err"); return; }
+        if(payload && payload.action === "play" && payload.url){
+          await playAndPublish(payload.url);
+        }
+      };
+    }catch(e){
+      log("Join error: " + (e && e.toString ? e.toString() : e));
+      alert("Join error: " + (e && e.toString ? e.toString() : e));
+    }
+  };
+
+  document.getElementById("leaveBtn").onclick = async () => {
+    if(ws){ ws.close(); ws = null; document.getElementById("wsstat").textContent = "closed"; }
+    if(room){
+      try{
+        if(publishedTrack){
+          await room.localParticipant.unpublishTrack(publishedTrack);
+          publishedTrack.stop && publishedTrack.stop();
+          publishedTrack = null;
+        }
+      }catch(e){ log("unpublish err: " + e.toString()); }
+      try{ room.disconnect(); } catch(e){}
+      room = null;
+      log("Bot left");
+      document.getElementById("joinBtn").disabled = false;
+      document.getElementById("leaveBtn").disabled = true;
+    }
+  };
+
+
+  console.log("[LIVEKIT local] raw window.livekit:", !!window.livekit);
+  console.log("[LIVEKIT local] detected globals:", Object.keys(window).filter(k => /livekit/i.test(k)));
+</script>
+</body>
+</html>
+
+

@@ -1,0 +1,93 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Frontdesk HITL — Admin</title>
+
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"><script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+
+ 
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Frontdesk — Human-in-the-Loop Demo</div>
+    <div class="sub">Local demo • Simulated calls, supervisor loop & auto-learning KB</div>
+  </header>
+
+  <main class="container">
+    <section class="panel panel-left">
+      <div class="card">
+        <h3>Simulate incoming call</h3>
+        <div class="form-row">
+          <input id="caller_id" placeholder="Caller ID" value="+91-0000000000"/>
+          <input id="caller_name" placeholder="Caller name" value="Test User"/>
+        </div>
+        <div class="form-row">
+          <input id="question" placeholder="Question (e.g., What are your hours?)" />
+        </div>
+        <div class="form-row">
+          <label class="small">Timeout (minutes, optional for demo)</label>
+          <input id="timeout" placeholder="leave blank for default" style="width:150px;" />
+        </div>
+        <div class="form-row">
+          <button id="btnSend" onclick="simulateCall()">Send Call</button>
+          <button onclick="refreshAll()" class="ghost">Refresh</button>
+        </div>
+        <div id="callResponse" class="muted small"></div>
+      </div>
+
+      <div class="card">
+        <h3>Pending Requests</h3>
+        <div id="pendingList" class="list"></div>
+      </div>
+
+      <div class="card">
+        <h3>History (latest)</h3>
+        <div id="historyList" class="list small"></div>
+      </div>
+    </section>
+
+    <section class="panel panel-right">
+      <div class="card">
+        <h3>Request Detail</h3>
+        <div id="detail">Select pending request...</div>
+      </div>
+
+      <div class="card">
+        <h3>Learned Answers (Knowledge Base)</h3>
+        <div class="kb-actions">
+          <input id="kbSearch" placeholder="Search KB..." />
+          <button class="ghost" onclick="openKbCreate()">Add KB</button>
+        </div>
+        <div id="kbList" class="list"></div>
+      </div>
+
+      <div class="card" id="messageTimelineCard">
+        <h3>Message Timeline</h3>
+        <div class="kb-actions">
+          <input id="timelineCaller" placeholder="Enter caller id (e.g., +91-0000000000)" />
+          <button class="ghost" onclick="renderTimeline()">View</button>
+          <button onclick="clearTimeline()">Clear</button>
+        </div>
+        <div id="messageTimeline" class="list" style="max-height:260px; overflow:auto;"></div>
+        <div style="margin-top:8px;" class="muted small">
+          Shows simulated inbound/outbound messages per caller for demo recording.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Console (server logs mirrored)</h3>
+        <div id="log" class="muted small"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal hidden"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
+

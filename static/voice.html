@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>LiveKit Voice Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+ 
+  <script src="/static/lib/livekit-client.umd.js"></script>
+  <script>window.livekit = window.LivekitClient || window.livekit || window.livekitClient || window.LiveKit || null;</script>
+
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#fff;padding:18px}
+    h3{margin:0 0 12px}
+    .row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+    input, button{padding:8px;border-radius:6px;border:1px solid #dbeafe}
+    button{cursor:pointer;background:#059669;color:#fff;border:none}
+    #vlog{background:#f7f9ff;padding:10px;border-radius:8px;min-height:120px;border:1px solid #e6eefc;overflow:auto}
+  </style>
+</head>
+<body>
+  <h3>LiveKit Voice Demo</h3>
+
+  <div class="row">
+    <input id="roomName" value="frontdesk-demo" />
+    <input id="identity" value="demo-user" />
+    <button id="joinBtn">Get Token & Join Room</button>
+    <button id="leaveBtn" disabled>Leave Room</button>
+  </div>
+
+  <div style="margin-bottom:10px;">
+    <input id="typedQuestion" placeholder="Type question to send to backend" style="width:70%;padding:8px;border-radius:6px;border:1px solid #e2e8f0" />
+    <button id="askBtn">Ask</button>
+  </div>
+
+  <pre id="vlog"></pre>
+
+<script>
+  const vlog = document.getElementById("vlog");
+  function vlogAdd(m){ vlog.textContent = `[${new Date().toLocaleTimeString()}] ${m}\n` + vlog.textContent; }
+
+  const LIVEKIT_SERVER = (window.location.protocol === 'https:' ? (window.location.origin.replace(/^https?:/,'https:')) : "https://hitl-f0xa31h8.livekit.cloud");
+  let room = null;
+
+
+  async function robustConnect(serverUrl, token, opts = {}) {
+    const LK = window.livekit || window.LivekitClient || window.livekitClient || window.LiveKit || null;
+    if (!LK) throw new Error("no LiveKit global found on window");
+    if (typeof LK.connect === "function") {
+      return await LK.connect(serverUrl, token, opts);
+    }
+    if (LK.Room && typeof LK.Room.connect === "function") {
+      return await LK.Room.connect(serverUrl, token, opts);
+    }
+    try {
+      if (typeof LK.Room === "function") {
+        const r = new LK.Room();
+        if (typeof r.connect === "function") { await r.connect(serverUrl, token, opts); return r; }
+        if (typeof r.join === "function") { await r.join(token, opts); return r; }
+        if (typeof r.joinRoom === "function") { await r.joinRoom(token, opts); return r; }
+      }
+    } catch (e){ console.warn("robustConnect: instance attempt failed:", e); }
+    if (LK.default && typeof LK.default.connect === "function") {
+      return await LK.default.connect(serverUrl, token, opts);
+    }
+    for (const k of Object.keys(LK)) {
+      try {
+        if (typeof LK[k] === "function" && k.toLowerCase().includes("connect")) {
+          const res = await LK[k](serverUrl, token, opts);
+          return res;
+        }
+      } catch(e){}
+    }
+    throw new Error("LiveKit connect not found. LK keys: " + JSON.stringify(Object.keys(LK).slice(0,200)));
+  }
+
+  async function getToken(identity, roomName){
+    const resp = await fetch(`/livekit/token?identity=${encodeURIComponent(identity)}&room=${encodeURIComponent(roomName)}`);
+    if(!resp.ok){ const txt = await resp.text(); throw new Error("token error: "+txt); }
+    const j = await resp.json();
+    return j.token;
+  }
+
+  document.getElementById("joinBtn").onclick = async ()=>{
+    const roomName = document.getElementById("roomName").value.trim();
+    const id = document.getElementById("identity").value.trim();
+    if(!roomName || !id){ alert("enter room & identity"); return; }
+    try{
+      vlogAdd("Requesting token...");
+      const token = await getToken(id, roomName);
+      vlogAdd("Connecting to LiveKit...");
+      room = await robustConnect(LIVEKIT_SERVER, token, { adaptiveStream: true });
+      vlogAdd("Joined room as " + id);
+      document.getElementById("joinBtn").disabled = true;
+      document.getElementById("leaveBtn").disabled = false;
+
+      
+      const LK = window.livekit || window.LivekitClient || window.livekitClient || window.LiveKit;
+      const tracks = await LK.createLocalTracks({ audio: true, video: false });
+      if(tracks && tracks[0]){
+        await room.localParticipant.publishTrack(tracks[0]);
+        vlogAdd("Published mic");
+      } else {
+        vlogAdd("Failed to create local audio track");
+      }
+    }catch(e){
+      vlogAdd("Join error: " + (e && e.toString ? e.toString() : e));
+      alert("Join error: " + (e && e.toString ? e.toString() : e));
+    }
+  };
+
+  document.getElementById("leaveBtn").onclick = async ()=>{
+    if(room){
+      try{ room.disconnect(); } catch(e){}
+      room = null;
+      vlogAdd("Left room");
+      document.getElementById("joinBtn").disabled = false;
+      document.getElementById("leaveBtn").disabled = true;
+    }
+  };
+
+ 
+  document.getElementById("askBtn").onclick = async ()=>{
+    const q = document.getElementById("typedQuestion").value.trim();
+    if(!q){ alert("Type a question"); return; }
+    try{
+      const payload = { caller_id: "+91-0000000000", caller_name: "Test User", question: q };
+      const resp = await fetch("/calls", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) });
+      const j = await resp.json();
+      vlogAdd("API response: " + JSON.stringify(j));
+    }catch(e){
+      vlogAdd("Ask error: " + (e && e.toString ? e.toString() : e));
+    }
+  };
+
+ 
+  console.log("[LIVEKIT local] raw window.livekit:", !!window.livekit);
+  console.log("[LIVEKIT local] detected globals:", Object.keys(window).filter(k => /livekit/i.test(k)));
+</script>
+</body>
+</html>
+
+

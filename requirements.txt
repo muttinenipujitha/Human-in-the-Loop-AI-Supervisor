@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pydantic
+livekit>=1.0.0
+gTTS==2.5.4
+python-dotenv
+
+
+
+
+
+
